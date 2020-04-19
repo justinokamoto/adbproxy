@@ -10,19 +10,23 @@
 
 #define ADB_PACKET_SIZE 65535
 
-// TODO: Rename using inbound/outbound
+enum forward_type{ KILL_ALL, KILL, FORWARD, REVERSE };
+
+typedef struct forward_msg {
+    forward_type type;
+    int port;
+} forward_msg;
+
 // https://android.googlesource.com/platform/system/core/+blame/master/adb/protocol.txt
 // https://github.com/cstyan/adbDocumentation
 
 // We're ignoring the messages, since we're only interested in parsing
 // payloads that start with specified prefix.
-
-// TODO: Make buffer readonly?
 bool matches(char (&buffer) [ADB_PACKET_SIZE]) {
     // TODO: REGEX forwarding and reverse forwarding ports
     // for killing forwarded ports
     // host(-serial):(possible id* +:)(kill)forward(-all)
-    // if (buffer.rfind("prefix", 0) == 0) {
+    // if (buffer starts w/ prefix) {
     // 	return true;
     // }
     // return false
@@ -48,24 +52,21 @@ void send_outbound_payload(char (&payload) [ADB_PACKET_SIZE], int payload_len)
     send(outbound_socket, &payload, payload_len, 0);
 }
 
-void accept_payload(int server_fd, struct sockaddr *address, socklen_t *addrlen)
+void accept_inbound(int server_fd, struct sockaddr *address, socklen_t *addrlen)
 {
-    int new_socket, valread;
+    int inbound_socket, valread;
     char buffer[ADB_PACKET_SIZE] = {0};
-    if ((new_socket = accept(server_fd, address, addrlen)) < 0)
+    if ((inbound_socket = accept(server_fd, address, addrlen)) < 0)
     {
         perror("accept");
         exit(EXIT_FAILURE);
     } else {
-	valread = read(new_socket, buffer, ADB_PACKET_SIZE);
+	valread = read(inbound_socket, buffer, ADB_PACKET_SIZE);
 	if (matches(buffer)) {
-	    // TODO:
-	    // PIPE TO SOMEWHERE WE WANT TO PIPE
-	    // PASS ON TO ACTUAL ADB SERVER
-	    // SHUTTLE RESPONSE BACK TO REQUESTER
+	    // TODO: Return forward_msg and pipe to user defined
+	    // socket?
 	}
 	send_outbound_payload(buffer, valread);
-	printf("PAYLOAD: %s\n", buffer);
     }
 }
 
@@ -105,7 +106,7 @@ int main(int argc, char const *argv[])
         exit(EXIT_FAILURE);
     }
     while (true) {
-	accept_payload(server_fd, (struct sockaddr *)&address, (socklen_t *) &addrlen);
+	accept_inbound(server_fd, (struct sockaddr *)&address, (socklen_t *) &addrlen);
     }
     return 0;
 }
