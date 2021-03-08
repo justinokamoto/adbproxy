@@ -1,23 +1,52 @@
+
 # ADB Proxy
-
-AOSP created the Android Device Bridge (ADB) protocol for communication between host and Android device. The protocol is realized by the Android platform tools which provides the ADB client/server utility used to communicate with the ADB daemon (ADBD) that runs on the Android device.
-
-The client/server nature of the ADB utility is useful, since the host intending to communicate with a given Android device does not have to be the same host to which that device is connected. However, there are rare cases where this model is broken, namely, when managing port forwarding between the host and device, as illustrated below:
-
+ADB Proxy is a simple, unobtrusive TCP proxy that proxies traffic between ADB client and ADB server without modification. Its only purpose is to parse ADB packets to understand when port forwarding commands are being sent. So it is made to understand the following ADB commands:
 ```
-TODO: ASCII ART
+$ adb reverse tcp:<port> tcp:<port>
+$ adb forward tcp:<port> tcp:<port>
+$ adb forward --remove tcp:<port>
+$ adb reverse --remove tcp:<port>
+$ adb reverse --remove-all
+$ adb forward --remove-all
 ```
+This is useful for scenarios when ADB client and ADB server are running on separate hosts (or even separate network interfaces), where ports between ADB client host and ADB server host will need to be forwarded accordingly in order for the above commands to work as expected.
 
-TODO: Android documentation on possible forwarding/reverse-forwarding commands
+For example, say we have Host A running ADB client commands and Host B running an ADB server with an Android device attached. If Host A runs `adb reverse tcp:3001 tcp:3002`, it should expect that traffic from the Android device's port `3001` would reach its (Host A's) port `3002`. However, traffic from port `3002` on Host B will need to be forwarded to port `3002` on Host A in order for this to function as expected.
 
-ADB proxy is a simple proxy ADB server that will simply passthrough all ADB traffic, while watching for forward messages. When a forward message is found, the proxy will then write this information to a specified socket.
+This is where ADB Proxy is useful, since it can be used to capture port forwarding commands so port forwarding can be setup appropriately (via SSH or whatnot).
 
+For more background, see [this blog post](https://medium.com/@justinchips/proxying-adb-client-connections-2ab495f774eb).
+
+## TODO: Usage as library
+TODO: Example 
 ```
-TODO: ASCII ART
-```
+$ adb reverse tcp:3001 tcp:3002
+$ nc -l localhost 3002 & # listen on 3002
+$ adb shell nc localhost 3001 # fails, as this port is only being forwarded on Host B
+```  
+## Installing
+ADB Proxy has the following dependencies:
+*  [libcheck](https://libcheck.github.io/check/web/install.html)-0.15.2
 
-The intention is to be used in tandom with another utility that, when given a port to forward, forwards said port between host executing the ADB client and host running the ADB server. An example below is given which forwards ports using SSH:
+## Make
+Make and run proxy executable:
+```
+$ make # optional 'debug' target
+$ ./adb_proxy
+```
+Make and run test executable:
+```
+$ make test
+$ ./adb_proxy_tests
+```
+# Resources
 
-```
-TODO: Small example
-```
+ADB client <---> ADB server
+
+*  [Android Documentation](https://android.googlesource.com/platform/packages/modules/adb/+/master/SERVICES.TXT)
+
+ADB server <---> ADBD on device
+
+*  [Android Documentation](https://android.googlesource.com/platform/system/core/+blame/master/adb/protocol.txt)
+
+*  [Unofficial Documentation](https://github.com/cstyan/adbDocumentation)

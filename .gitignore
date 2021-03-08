@@ -1,0 +1,7 @@
+.vscode
+*.o
+*.out
+*.dSYM
+*.DS_Store
+adb_proxy_tests
+adb_proxy
