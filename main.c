@@ -15,6 +15,7 @@ void *handler(adbp_forward_req req)
 
 int main(int argc, char const *argv[])
 {
+    // Pass req obj to be filled out and process in handler?
     adbp_start_server(5038, 5037, handler);
     return 0;
 }

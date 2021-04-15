@@ -90,6 +90,29 @@ int process_payload(int bytes_read, char *payload, int payload_len)
     return 0;
 }
 
+// TODO: Take pointer to req? It's small though.
+void *test_handler(adbp_forward_req req)
+{
+    if (req.valid) {
+        if (req.req_transport == ADBP_ADBD_REVERSE_TRANSPORT) {
+            printf("REVERSE ");
+        }
+        if (req.req_type == ADBP_FORWARD) {
+            printf("FORWARD ");
+        } else if (req.req_type == ADBP_FORWARD_KILL) {
+            printf("FORWARD KILL ");
+        } else if (req.req_type == ADBP_FORWARD_KILL_ALL) {
+            printf("FORWARD KILL ALL ");
+        }
+        if (req.req_type == ADBP_FORWARD) {
+            printf("%d:%d", req.local_port, req.device_port);
+        } else if (req.req_type == ADBP_FORWARD_KILL) {
+            printf("%d", req.local_port);
+        }
+        printf("\n");
+    }
+}
+
 void *client_inbound(void *vargp)
 {
     int direct_transport = 0;
@@ -106,24 +129,10 @@ void *client_inbound(void *vargp)
             break;
         }
         parse_payload(&req, &payload, bytes_read);
-        if (req.valid) {
-            if (req.req_transport == ADBP_ADBD_REVERSE_TRANSPORT) {
-                printf("REVERSE ");
-            }
-            if (req.req_type == ADBP_FORWARD) {
-                printf("FORWARD ");
-            } else if (req.req_type == ADBP_FORWARD_KILL) {
-                printf("FORWARD KILL ");
-            } else if (req.req_type == ADBP_FORWARD_KILL_ALL) {
-                printf("FORWARD KILL ALL ");
-            }
-            if (req.req_type == ADBP_FORWARD) {
-                printf("%d:%d", req.local_port, req.device_port);
-            } else if (req.req_type == ADBP_FORWARD_KILL) {
-                printf("%d", req.local_port);
-            }
-            printf("\n");
-        }
+        // TODO: Execute handler somehow
+        void (*f)(adbp_forward_req) = test_handler;
+        f(req);
+
         send(args->outbound_fd, &payload, bytes_read, 0);
     }
 
