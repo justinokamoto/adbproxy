@@ -12,8 +12,6 @@
 #else
  #define D if(0) 
 #endif
-#define PROXY_PORT 5038
-#define ADB_PORT 5037
 
 // TODO: Refactor into library
 // TODO: Better closing of FDs
@@ -50,7 +48,7 @@ int _bind(int port, struct sockaddr_in *address, int attrlen)
     }
     address->sin_family = AF_INET;
     address->sin_addr.s_addr = INADDR_ANY;
-    address->sin_port = htons( PROXY_PORT );
+    address->sin_port = htons(port);
 
     if (bind(fd, (struct sockaddr *)address,
                                  attrlen)<0)
@@ -134,17 +132,17 @@ void *client_inbound(void *vargp)
     pthread_exit(NULL);
 }
 
-void accept_inbound(int server_fd, struct sockaddr *address, socklen_t *addrlen)
+void accept_inbound(int proxy_fd, int adb_server_port, struct sockaddr *address, socklen_t *addrlen)
 {
     int inbound_socket, valread;
-    if ((inbound_socket = accept(server_fd, address, addrlen)) < 0)
+    if ((inbound_socket = accept(proxy_fd, address, addrlen)) < 0)
     {
         perror("accept");
         exit(EXIT_FAILURE);
     }
 
     struct sockaddr_in adb_address;
-    int outbound_socket = _connect(ADB_PORT, &adb_address, sizeof(adb_address));
+    int outbound_socket = _connect(adb_server_port, &adb_address, sizeof(adb_address));
 
     struct connection_args args; // Can this pop from the heap too early? No
     args.inbound_fd = inbound_socket;
@@ -175,15 +173,15 @@ void adbp_start_server(int proxy_port, int adb_server_port, void (*msg_handler)(
     struct sockaddr_in address;
     int opt = 1;
     int addrlen = sizeof(address);
-    int server_fd = _bind(PROXY_PORT, &address, addrlen);
-    if (listen(server_fd, 3) < 0)
+    int proxy_fd = _bind(proxy_port, &address, addrlen);
+    if (listen(proxy_fd, 3) < 0)
     {
         perror("listen");
         exit(EXIT_FAILURE);
     }
-    D printf("Starting server on port %d...\n", PROXY_PORT);
+    D printf("Starting server on port %d...\n", proxy_port);
     while (1) {
         D printf("Accepting connections...\n");
-	    accept_inbound(server_fd, (struct sockaddr *)&address, (socklen_t *) &addrlen);
+	    accept_inbound(proxy_fd, adb_server_port, (struct sockaddr *)&address, (socklen_t *) &addrlen);
     }
 }

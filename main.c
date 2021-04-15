@@ -15,7 +15,6 @@ void *handler(adbp_forward_req req)
 
 int main(int argc, char const *argv[])
 {
-    // TODO: Make this run in its own thread
-    adbp_start_server(5038, 5037, handler); // Should be function pointer!
+    adbp_start_server(5038, 5037, handler);
     return 0;
 }
