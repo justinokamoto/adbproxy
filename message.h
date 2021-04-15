@@ -23,7 +23,5 @@ typedef struct {
     int device_port;
 } adbp_forward_req;
 
-// TODO: Null terminated shiiiiiiiip! (w/o regex you don't need it)
-
 void parse_payload(adbp_forward_req *req, char *payload, int payload_len);
 #endif
