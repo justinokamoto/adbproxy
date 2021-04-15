@@ -4,8 +4,9 @@
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <string.h>
-#include "message.h"
 #include <pthread.h>
+
+#include "message.h"
 
 #ifdef DEBUG
  #define D if(1) 
@@ -26,7 +27,9 @@
 struct connection_args {
     int inbound_fd;
     int outbound_fd;
+    void (*handler)(adbp_forward_req);
 };
+
 // TODO: NARROW DOWN THE INCLUDES
 
 int _bind(int port, struct sockaddr_in *address, int attrlen)
@@ -90,29 +93,6 @@ int process_payload(int bytes_read, char *payload, int payload_len)
     return 0;
 }
 
-// TODO: Take pointer to req? It's small though.
-void *test_handler(adbp_forward_req req)
-{
-    if (req.valid) {
-        if (req.req_transport == ADBP_ADBD_REVERSE_TRANSPORT) {
-            printf("REVERSE ");
-        }
-        if (req.req_type == ADBP_FORWARD) {
-            printf("FORWARD ");
-        } else if (req.req_type == ADBP_FORWARD_KILL) {
-            printf("FORWARD KILL ");
-        } else if (req.req_type == ADBP_FORWARD_KILL_ALL) {
-            printf("FORWARD KILL ALL ");
-        }
-        if (req.req_type == ADBP_FORWARD) {
-            printf("%d:%d", req.local_port, req.device_port);
-        } else if (req.req_type == ADBP_FORWARD_KILL) {
-            printf("%d", req.local_port);
-        }
-        printf("\n");
-    }
-}
-
 void *client_inbound(void *vargp)
 {
     int direct_transport = 0;
@@ -129,10 +109,7 @@ void *client_inbound(void *vargp)
             break;
         }
         parse_payload(&req, &payload, bytes_read);
-        // TODO: Execute handler somehow
-        void (*f)(adbp_forward_req) = test_handler;
-        f(req);
-
+        args->handler(req);
         send(args->outbound_fd, &payload, bytes_read, 0);
     }
 
@@ -141,43 +118,7 @@ void *client_inbound(void *vargp)
     pthread_exit(NULL);
 }
 
-void accept_inbound(int proxy_fd, int adb_server_port, struct sockaddr *address, socklen_t *addrlen)
-{
-    int inbound_socket, valread;
-    if ((inbound_socket = accept(proxy_fd, address, addrlen)) < 0)
-    {
-        perror("accept");
-        exit(EXIT_FAILURE);
-    }
-
-    struct sockaddr_in adb_address;
-    int outbound_socket = _connect(adb_server_port, &adb_address, sizeof(adb_address));
-
-    struct connection_args args; // Can this pop from the heap too early? No
-    args.inbound_fd = inbound_socket;
-    args.outbound_fd = outbound_socket;
-
-    pthread_t thread_id;
-    pthread_create(&thread_id, NULL, client_inbound, (void *) &args);
-
-    char payload[MAX_ADB_SERVER_PAYLOAD];
-    while(1)
-    {
-        ssize_t bytes_read = read(args.outbound_fd, &payload, sizeof(payload));
-
-        D printf("Received server payload.\n");
-        if (process_payload(bytes_read, &payload, sizeof(payload))) {
-            break;
-        }
-        send(args.inbound_fd, &payload, bytes_read, 0);
-    }
-
-    pthread_cancel(thread_id);
-    close(args.inbound_fd);
-    close(args.outbound_fd);
-}
-
-void adbp_start_server(int proxy_port, int adb_server_port, void (*msg_handler)(adbp_forward_req))
+void adbp_start_server(int proxy_port, int adb_server_port, void (*handler)(adbp_forward_req))
 {
     struct sockaddr_in address;
     int opt = 1;
@@ -191,6 +132,40 @@ void adbp_start_server(int proxy_port, int adb_server_port, void (*msg_handler)(
     D printf("Starting server on port %d...\n", proxy_port);
     while (1) {
         D printf("Accepting connections...\n");
-	    accept_inbound(proxy_fd, adb_server_port, (struct sockaddr *)&address, (socklen_t *) &addrlen);
+	    // accept_inbound(proxy_fd, adb_server_port, (struct sockaddr *)&address, (socklen_t *) &addrlen);
+
+        int inbound_socket, valread;
+        if ((inbound_socket = accept(proxy_fd, &address, &addrlen)) < 0)
+        {
+            perror("accept");
+            exit(EXIT_FAILURE);
+        }
+
+        struct sockaddr_in adb_address;
+        int outbound_socket = _connect(adb_server_port, &adb_address, sizeof(adb_address));
+
+        struct connection_args args; // Can this pop from the heap too early? No
+        args.inbound_fd = inbound_socket;
+        args.outbound_fd = outbound_socket;
+        args.handler = handler;
+
+        pthread_t thread_id;
+        pthread_create(&thread_id, NULL, client_inbound, (void *) &args);
+
+        char payload[MAX_ADB_SERVER_PAYLOAD];
+        while(1)
+        {
+            ssize_t bytes_read = read(args.outbound_fd, &payload, sizeof(payload));
+
+            D printf("Received server payload.\n");
+            if (process_payload(bytes_read, &payload, sizeof(payload))) {
+                break;
+            }
+            send(args.inbound_fd, &payload, bytes_read, 0);
+        }
+
+        pthread_cancel(thread_id);
+        close(args.inbound_fd);
+        close(args.outbound_fd);
     }
 }

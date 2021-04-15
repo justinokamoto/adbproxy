@@ -11,6 +11,8 @@
 #include <stdio.h>
 #include <sys/socket.h>
 
+#define HEADER_LEN 4 // TODO: Rename to ADBP_*
+
 /*
  * Convert digit string of `base` and `len` to base 10 num
  * in base 10
